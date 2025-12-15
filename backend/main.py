@@ -2,11 +2,13 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+from auth import authenticate_user, create_access_token, get_current_user
+
 
 from engine_logic import StoryEngine
 
@@ -97,3 +99,11 @@ async def generate_story(request: StoryRequest):
     pdf_url = engine.compile_pdf(generated_pages)
 
     return {"status": "success", "pdf_url": pdf_url, "image_urls": generated_urls}
+
+@app.post("/login")
+async def login(email: str = Form(...), password: str = Form(...)):
+    user = authenticate_user(email, password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = create_access_token({"sub": user.email, "role": user.role})
+    return {"access_token": token, "token_type": "bearer", "role": user.role}

@@ -9,12 +9,10 @@ export default function App() {
     return <Login onLoginSuccess={(role) => setRole(role)} />;
   }
   const handleLogout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("role");
-  setRole(null);
-};
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    setRole(null);
+  };
 
-
-  return <BuilderAndUserPanel role={role} onLogout={handleLogout} />
-;
+  return <BuilderAndUserPanel role={role} onLogout={handleLogout} />;
 }

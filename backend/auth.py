@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from database import SessionLocal
 from models import User
+from sqlalchemy.orm import Session
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -24,6 +25,7 @@ if not ACCESS_TOKEN_EXPIRE_MINUTES:
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+
 def authenticate_user(email: str, password: str):
     db = SessionLocal()
     user = db.query(User).filter(User.email == email).first()
@@ -33,6 +35,7 @@ def authenticate_user(email: str, password: str):
     if user.password_hash != password:
         return None
     return user
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -44,13 +47,20 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(lambda: SessionLocal())
+) -> User:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        role: str = payload.get("role")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("sub")
         if email is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return {"email": email, "role": role}
-    except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")

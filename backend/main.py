@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from engine_logic import StoryEngine
 from database import SessionLocal, engine, Base
 from PIL import Image, ImageDraw, ImageFont
-from helper import delete_user_face_assets
+from helper import delete_user_face_assets, delete_other_user_designs
 from rembg import remove as rembg_remove
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,6 @@ async def startup_event():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Ensure required subfolders exist; do not create demo images
     for subdir in ("backgrounds", "characters"):
         (UPLOAD_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
@@ -213,6 +212,16 @@ async def generate_story(
         except Exception as e:
             logger.info(f"Error deleting user face assets: {e}")
 
+        try:
+            deleted_designs = delete_other_user_designs(
+                current_user.id, db, keep_design_id=design.id
+            )
+            logger.info(
+                f"Deleted {deleted_designs} old designs for user {current_user.id}"
+            )
+        except Exception as e:
+            logger.info(f"Error deleting old story designs: {e}")
+
     return {"status": "success", "pdf_url": pdf_url, "image_urls": generated_urls}
 
 
@@ -300,8 +309,6 @@ def save_design(
         raise HTTPException(status_code=403, detail="Only admins can save designs")
 
     pages_json = json.dumps([page.dict() for page in payload.pages])
-
-    # update the most recent design for this user/face, or create a new one
     design = (
         db.query(StoryDesign)
         .filter(

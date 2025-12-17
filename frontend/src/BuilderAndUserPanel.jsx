@@ -15,27 +15,48 @@ const BASE_URL = "http://127.0.0.1:8000";
 const PRELOADED_BACKGROUNDS = [
   {
     id: "bg1",
-    filename: "bg1.jpg",
-    name: "Dark Castle",
-    url: `${BASE_URL}/static/uploads/bg1.jpg`,
+    filename: "backgrounds/bg1.png",
+    name: "Forest",
+    url: `${BASE_URL}/static/uploads/backgrounds/bg1.png`,
   },
   {
     id: "bg2",
-    filename: "bg2.jpg",
-    name: "Floating Islands",
-    url: `${BASE_URL}/static/uploads/bg2.jpg`,
+    filename: "backgroundsbg2.png",
+    name: "Forest Temple",
+    url: `${BASE_URL}/static/uploads/backgrounds/bg2.png`,
   },
   {
     id: "bg3",
-    filename: "bg3.jpg",
+    filename: "backgrounds/bg3.png",
     name: "Stone Circle",
-    url: `${BASE_URL}/static/uploads/bg3.jpg`,
+    url: `${BASE_URL}/static/uploads/backgrounds/bg3.png`,
   },
   {
     id: "bg4",
-    filename: "bg4.jpg",
-    name: "Forest Temple",
-    url: `${BASE_URL}/static/uploads/bg4.jpg`,
+    filename: "backgrounds/bg4.png",
+    name: "Dark Castle",
+    url: `${BASE_URL}/static/uploads/backgrounds/bg4.png`,
+  },
+  {
+    id: "bg5",
+    filename: "backgrounds/bg5.png",
+    name: "Floating Islands",
+    url: `${BASE_URL}/static/uploads/backgrounds/bg5.png`,
+  },
+];
+
+const PRELOADED_CHARACTERS = [
+  {
+    id: "sec1",
+    filename: "characters/sec1.png",
+    name: "Secondary Character 1",
+    url: `${BASE_URL}/static/uploads/characters/sec1.png`,
+  },
+  {
+    id: "sec2",
+    filename: "characters/sec2.png",
+    name: "Secondary Character 2",
+    url: `${BASE_URL}/static/uploads/characters/sec2.png`,
   },
 ];
 
@@ -113,7 +134,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   const [pages, setPages] = useState(INITIAL_PAGES);
   const [activePageIdx, setActivePageIdx] = useState(0);
   const [backgrounds, setBackgrounds] = useState(PRELOADED_BACKGROUNDS);
-  const [characters, setCharacters] = useState([]);
+  const [characters, setCharacters] = useState(PRELOADED_CHARACTERS);
   const [userFace, setUserFace] = useState(null);
   const [userFaces, setUserFaces] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -251,30 +272,52 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
     formData.append("file", file);
 
     try {
-      const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
       console.log("TOKEN:", token);
 
-      const asset = {
-        id: res.data.filename,
-        url: res.data.url,
-        filename: res.data.filename,
-        name: file.name,
-      };
+      if (type === "bg") {
+        formData.append("subdir", "backgrounds");
+        const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      if (type === "bg") setBackgrounds((prev) => [...prev, asset]);
-      else if (type === "char") setCharacters((prev) => [...prev, asset]);
-      else if (type === "face") {
-        setUserFace(asset);
+        const asset = {
+          id: res.data.filename,
+          url: res.data.url,
+          filename: res.data.filename,
+          name: file.name,
+        };
+
+        setBackgrounds((prev) => [...prev, asset]);
+      } else if (type === "char") {
+        formData.append("subdir", "characters");
+        const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const asset = {
+          id: res.data.filename,
+          url: res.data.url,
+          filename: res.data.filename,
+          name: file.name,
+        };
+        setCharacters((prev) => [...prev, asset]);
+      } else if (type === "face") {
         try {
           const faceForm = new FormData();
           faceForm.append("file", file);
           const token = localStorage.getItem("token");
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-          await axios.post(`${BASE_URL}/upload-face`, faceForm, { headers });
+          const res = await axios.post(`${BASE_URL}/upload-face`, faceForm, {
+            headers,
+          });
+          const asset = {
+            id: res.data.filename,
+            url: res.data.url,
+            filename: res.data.filename,
+            name: file.name,
+          };
+          setUserFace(asset);
         } catch (err) {
           console.warn(
             "upload-face failed:",

@@ -13,7 +13,7 @@ from models import User, UploadedAsset, StoryDesign
 from sqlalchemy.orm import Session
 from engine_logic import StoryEngine
 from database import SessionLocal, engine, Base
-
+from PIL import Image, ImageDraw, ImageFont
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
@@ -33,6 +33,10 @@ Base.metadata.create_all(bind=engine)
 async def startup_event():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Ensure required subfolders exist; do not create demo images
+    for subdir in ("backgrounds", "characters"):
+        (UPLOAD_DIR / subdir).mkdir(parents=True, exist_ok=True)
 
 
 app.add_middleware(
@@ -82,7 +86,9 @@ ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"}
 
 
 @app.post("/upload-asset")
-async def upload_asset(file: UploadFile = File(...)):
+async def upload_asset(
+    file: UploadFile = File(...), subdir: Optional[str] = Form(None)
+):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
@@ -92,12 +98,28 @@ async def upload_asset(file: UploadFile = File(...)):
 
     try:
         new_filename = f"{uuid.uuid4()}{file_ext}"
-        save_path = UPLOAD_DIR / new_filename
+        # save_path = UPLOAD_DIR / new_filename
+        # with open(save_path, "wb+") as buffer:
+        #     shutil.copyfileobj(file.file, buffer)
+        # return {
+        #     "url": f"{BASE_URL}/static/uploads/{new_filename}",
+        #     "filename": new_filename,
+        # }
+        if subdir in ("backgrounds", "characters"):
+            save_dir = UPLOAD_DIR / subdir
+            save_dir.mkdir(parents=True, exist_ok=True)
+            save_path = save_dir / new_filename
+            response_filename = f"{subdir}/{new_filename}"
+        else:
+            save_path = UPLOAD_DIR / new_filename
+            response_filename = f"{new_filename}"
+
         with open(save_path, "wb+") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
         return {
-            "url": f"{BASE_URL}/static/uploads/{new_filename}",
-            "filename": new_filename,
+            "url": f"{BASE_URL}/static/uploads/{response_filename}",
+            "filename": response_filename,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
@@ -289,7 +311,7 @@ def save_design(
 
     db.commit()
     db.refresh(design)
-    return {"status": "saved", "design_id": design.id}
+    return {"status": "saved", "design_id": design.id, "user_id": design.user_id}
 
 
 @app.get("/user-design")

@@ -138,6 +138,8 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   const [userFace, setUserFace] = useState(null);
   const [userFaces, setUserFaces] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploadingFace, setIsUploadingFace] = useState(false);
+  const [isUploadingCharacter, setIsUploadingCharacter] = useState(false);
   const [storyResult, setStoryResult] = useState(null);
   const [designUserId, setDesignUserId] = useState(null);
 
@@ -289,19 +291,25 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
         setBackgrounds((prev) => [...prev, asset]);
       } else if (type === "char") {
+        setIsUploadingCharacter(true);
         formData.append("subdir", "characters");
-        const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        try {
+          const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
 
-        const asset = {
-          id: res.data.filename,
-          url: res.data.url,
-          filename: res.data.filename,
-          name: file.name,
-        };
-        setCharacters((prev) => [...prev, asset]);
+          const asset = {
+            id: res.data.filename,
+            url: res.data.url,
+            filename: res.data.filename,
+            name: file.name,
+          };
+          setCharacters((prev) => [...prev, asset]);
+        } finally {
+          setIsUploadingCharacter(false);
+        }
       } else if (type === "face") {
+        setIsUploadingFace(true);
         try {
           const faceForm = new FormData();
           faceForm.append("file", file);
@@ -333,6 +341,8 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
               "Server face upload failed. Check console for details."
             );
           }
+        } finally {
+          setIsUploadingFace(false);
         }
       }
     } catch (err) {
@@ -617,10 +627,14 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
                   4. SECONDARY CHARACTER
                 </h3>
                 <button
-                  onClick={() => charInput.current.click()}
+                  onClick={() => {
+                    if (!isUploadingCharacter) {
+                      charInput.current.click();
+                    }
+                  }}
                   className="text-[9px] bg-purple-600 px-2 py-1 rounded text-white"
                 >
-                  + Upload
+                  {isUploadingCharacter ? "Processing..." : "+ Upload"}
                 </button>
                 <input
                   type="file"
@@ -694,7 +708,11 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
           <div className="p-8 flex flex-col items-center justify-center h-full space-y-6">
             <h2 className="text-3xl font-bold text-white">Create Your Story</h2>
             <div
-              onClick={() => faceInput.current.click()}
+              onClick={() => {
+                if (!isUploadingFace) {
+                  faceInput.current.click();
+                }
+              }}
               className="w-56 h-56 rounded-full border-4 border-dashed border-cyan-500 flex items-center justify-center cursor-pointer hover:bg-gray-800 overflow-hidden relative shadow-2xl"
             >
               {userFace ? (
@@ -704,12 +722,25 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
                 />
               ) : (
                 <div className="text-center">
-                  <span className="text-cyan-500 font-bold block text-2xl">
-                    +
-                  </span>
-                  <span className="text-gray-400 text-xs font-bold">
-                    UPLOAD FACE
-                  </span>
+                  {isUploadingFace ? (
+                    <>
+                      <span className="text-cyan-500 font-bold block text-sm">
+                        Processing...
+                      </span>
+                      <span className="text-gray-400 text-[10px] font-bold">
+                        Removing background
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-cyan-500 font-bold block text-2xl">
+                        +
+                      </span>
+                      <span className="text-gray-400 text-xs font-bold">
+                        UPLOAD FACE
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
               <input
@@ -721,7 +752,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
             </div>
             <button
               onClick={generateStory}
-              disabled={isGenerating || !userFace}
+              disabled={isGenerating || !userFace || isUploadingFace}
               className={`w-full max-w-sm py-4 rounded-xl font-bold text-xl shadow-lg transition-all ${
                 isGenerating
                   ? "bg-gray-600"

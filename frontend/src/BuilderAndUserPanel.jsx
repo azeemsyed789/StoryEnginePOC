@@ -118,6 +118,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   const [userFaces, setUserFaces] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [storyResult, setStoryResult] = useState(null);
+  const [designUserId, setDesignUserId] = useState(null);
 
   const bgInput = useRef(null);
   const charInput = useRef(null);
@@ -164,17 +165,82 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
         const res = await axios.get(`${BASE_URL}/user-faces`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
+        console.log("user faces:", res.data);
         setUserFaces(res.data);
 
-        // Auto-set the first face if user login
-        if (!isAdmin && res.data.length > 0) {
-          setUserFace(res.data[0]);
-        }
+        // if (!isAdmin && res.data.length > 0) {
+        //   setUserFace(res.data[0]);
+        // }
       } catch (err) {
         console.error("Error fetching faces:", err);
       }
     };
     fetchFaces();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    const fetchSavedDesign = async () => {
+      if (isAdmin) return;
+      try {
+        const res = await axios.get(`${BASE_URL}/user-design`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        const faceFile = res.data.user_face_filename;
+        const loadedUserFace = {
+          filename: faceFile,
+          url: `${BASE_URL}/static/uploads/${faceFile}`,
+        };
+        // Keep the saved face for story generation, but do NOT treat it as
+        // "uploaded this session" so the UI doesn't show a preset face image.
+        // setUserFace(loadedUserFace);
+
+        const mappedPages = (res.data.pages || []).map((p, idx) => {
+          const backgroundAsset = p.background_filename
+            ? {
+                id: p.background_filename,
+                filename: p.background_filename,
+                url: `${BASE_URL}/static/uploads/${p.background_filename}`,
+              }
+            : null;
+
+          return {
+            id: idx,
+            background: backgroundAsset,
+            items: (p.elements || []).map((item, itemIdx) => {
+              const filename =
+                item.type === "placeholder"
+                  ? faceFile
+                  : item.asset_filename || item.filename;
+              return {
+                id: `${item.type}_${itemIdx}_${Date.now()}`,
+                filename,
+                image: `${BASE_URL}/static/uploads/${filename}`,
+                url: `${BASE_URL}/static/uploads/${filename}`,
+                x: (item.x || 0) * 800,
+                y: (item.y || 0) * 600,
+                pose: item.pose,
+                type: item.type === "character" ? "secondary" : item.type,
+              };
+            }),
+            text: p.text,
+            primaryPose:
+              p.primary_pose || p.primaryPose || "Standing Naturally",
+            secondaryPose:
+              p.secondary_pose || p.secondaryPose || "Standing Naturally",
+          };
+        });
+
+        if (mappedPages.length > 0) {
+          setPages(mappedPages);
+        }
+      } catch (err) {
+        if (err.response?.status !== 404) {
+          console.error("Error loading saved design", err);
+        }
+      }
+    };
+
+    fetchSavedDesign();
   }, [isAdmin]);
 
   const handleUpload = async (e, type) => {
@@ -191,28 +257,6 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
       console.log("TOKEN:", token);
 
-      try {
-        const faceForm = new FormData();
-        faceForm.append("file", file);
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        await axios.post(`${BASE_URL}/upload-face`, faceForm, { headers });
-      } catch (err) {
-        console.warn(
-          "upload-face failed:",
-          err.response?.status,
-          err.response?.data || err.message
-        );
-        if (err.response?.status === 401) {
-          alert(
-            "Face saved locally but server-side face upload requires authentication. Please login to save face to your account."
-          );
-        } else {
-          console.warn("Server face upload failed. Check console for details.");
-        }
-      }
-
       const asset = {
         id: res.data.filename,
         url: res.data.url,
@@ -222,7 +266,32 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
       if (type === "bg") setBackgrounds((prev) => [...prev, asset]);
       else if (type === "char") setCharacters((prev) => [...prev, asset]);
-      else if (type === "face") setUserFace(asset);
+      else if (type === "face") {
+        setUserFace(asset);
+        try {
+          const faceForm = new FormData();
+          faceForm.append("file", file);
+          const token = localStorage.getItem("token");
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+          await axios.post(`${BASE_URL}/upload-face`, faceForm, { headers });
+        } catch (err) {
+          console.warn(
+            "upload-face failed:",
+            err.response?.status,
+            err.response?.data || err.message
+          );
+          if (err.response?.status === 401) {
+            alert(
+              "Face saved locally but server-side face upload requires authentication. Please login to save face to your account."
+            );
+          } else {
+            console.warn(
+              "Server face upload failed. Check console for details."
+            );
+          }
+        }
+      }
     } catch (err) {
       console.error("Upload Failed:", err.response?.data || err.message);
       alert("Upload Failed. Check console for details.");
@@ -230,6 +299,9 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   };
 
   const addItem = (asset, type) => {
+    console.log("designUserId:", designUserId);
+    console.log("asset:", asset);
+    console.log("asset.user_id:", asset.user_id);
     const poseToUse =
       type === "placeholder"
         ? activePage.primaryPose
@@ -249,6 +321,54 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   const removeItem = (id) =>
     updateActivePage({ items: activePage.items.filter((i) => i.id !== id) });
 
+  const saveDesign = async () => {
+    if (!designUserId) {
+      alert("Select a user's face to attach this design to.");
+      return;
+    }
+
+    const validPages = pages.filter((p) => p.background !== null);
+    if (validPages.length === 0) {
+      alert("Add at least one background before saving.");
+      return;
+    }
+
+    if (!userFace) {
+      alert("Pick which user's face this design belongs to.");
+      return;
+    }
+
+    const payload = {
+      target_user_id: designUserId,
+      user_face_filename: userFace.filename,
+      pages: pages.map((p) => ({
+        background_filename: p.background ? p.background.filename : "",
+        text: p.text,
+        primary_pose: p.primaryPose,
+        secondary_pose: p.secondaryPose,
+        elements: p.items.map((item) => ({
+          type: item.type,
+          asset_filename:
+            item.type === "placeholder" ? userFace.filename : item.filename,
+          pose: item.pose,
+          x: Math.max(0, Math.min(item.x, 800)) / 800,
+          y: Math.max(0, Math.min(item.y, 600)) / 600,
+        })),
+      })),
+      status: "draft",
+    };
+
+    try {
+      await axios.post(`${BASE_URL}/admin/save-design`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      alert("Design saved for user.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save design.");
+    }
+  };
+
   const handleDragEnd = (e) => {
     const { active, delta } = e;
     if (!delta) return;
@@ -263,32 +383,43 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
   };
 
   const generateStory = async () => {
-    if (!userFace) return alert("User: Please upload your face first!");
-    const validPages = pages.filter((p) => p.background !== null);
-    if (validPages.length === 0)
-      return alert("Admin: Design at least one page!");
+    const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+    const hasDesignedPages = pages.some((p) => p.background !== null);
+
+    // If the user has no local design (likely after re-login), rely on server-saved design
+    const shouldUseSavedDesign = !hasDesignedPages;
+
+    if (!shouldUseSavedDesign && !userFace) {
+      return alert("User: Please upload your face first!");
+    }
 
     setIsGenerating(true);
     try {
-      const payload = {
-        user_face_filename: userFace.filename,
-        pages: pages.map((p) => ({
-          background_filename: p.background ? p.background.filename : "",
-          text: p.text,
-          primary_pose: p.primaryPose,
-          secondary_pose: p.secondaryPose,
-          elements: p.items.map((item) => ({
-            type: item.type,
-            asset_filename:
-              item.type === "placeholder" ? userFace.filename : item.filename,
-            pose: item.pose,
-            x: Math.max(0, Math.min(item.x, 800)) / 800,
-            y: Math.max(0, Math.min(item.y, 600)) / 600,
-          })),
-        })),
-      };
+      const payload = shouldUseSavedDesign
+        ? {}
+        : {
+            user_face_filename: userFace.filename,
+            pages: pages.map((p) => ({
+              background_filename: p.background ? p.background.filename : "",
+              text: p.text,
+              primary_pose: p.primaryPose,
+              secondary_pose: p.secondaryPose,
+              elements: p.items.map((item) => ({
+                type: item.type,
+                asset_filename:
+                  item.type === "placeholder"
+                    ? userFace.filename
+                    : item.filename,
+                pose: item.pose,
+                x: Math.max(0, Math.min(item.x, 800)) / 800,
+                y: Math.max(0, Math.min(item.y, 600)) / 600,
+              })),
+            })),
+          };
 
-      const res = await axios.post(`${BASE_URL}/generate-story`, payload);
+      const res = await axios.post(`${BASE_URL}/generate-story`, payload, {
+        headers: authHeaders,
+      });
       setStoryResult(res.data);
     } catch (e) {
       console.error(e);
@@ -376,7 +507,11 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
                   <img
                     key={face.filename}
                     src={face.url}
-                    onClick={() => addItem(face, "placeholder")}
+                    onClick={() => {
+                      setDesignUserId(face.user_id);
+                      setUserFace(face);
+                      addItem(face, "placeholder");
+                    }}
                     className="w-full h-16 object-contain bg-gray-700 rounded cursor-pointer border border-gray-600 hover:border-white transition-all hover:scale-110"
                   />
                 ))}
@@ -505,6 +640,12 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
               rows={3}
               placeholder="Story text..."
             />
+            <button
+              onClick={saveDesign}
+              className="w-full mt-3 py-3 bg-green-600 hover:bg-green-500 rounded text-white font-bold text-xs shadow-lg"
+            >
+              SAVE DESIGN FOR USER
+            </button>
           </div>
         ) : (
           <div className="p-8 flex flex-col items-center justify-center h-full space-y-6">

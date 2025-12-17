@@ -57,7 +57,7 @@ def delete_user_face_assets(
 def delete_other_user_designs(
     user_id: int,
     db: Session,
-    keep_design_id: Optional[int] = None,
+    # keep_design_id: Optional[int] = None,
 ) -> int:
     """
     Delete all StoryDesign rows for `user_id` except `keep_design_id`.
@@ -66,8 +66,8 @@ def delete_other_user_designs(
 
     stmt = delete(StoryDesign).where(StoryDesign.user_id == user_id)
 
-    if keep_design_id is not None:
-        stmt = stmt.where(StoryDesign.id != keep_design_id)
+    # if keep_design_id is not None:
+    #     stmt = stmt.where(StoryDesign.id != keep_design_id)
 
     result = db.execute(stmt)
     db.commit()
@@ -75,6 +75,6 @@ def delete_other_user_designs(
     deleted = result.rowcount or 0
 
     logger.info(
-        f"Deleted {deleted} story designs for user {user_id} (kept={keep_design_id})"
+        f"Deleted {deleted} story designs for user {user_id}"
     )
     return deleted

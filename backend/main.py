@@ -150,10 +150,12 @@ async def generate_story(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(lambda: SessionLocal()),
 ):
+    print(f"Request story {request}... Reqiest.pages {request.pages}")
     if current_user.role != "user":
         raise HTTPException(status_code=403, detail="Admins cannot generate stories")
 
     if not request.pages:
+        print("No pages provided, using last saved design...")
         design = (
             db.query(StoryDesign)
             .filter(StoryDesign.user_id == current_user.id)
@@ -164,7 +166,9 @@ async def generate_story(
             raise HTTPException(
                 status_code=400, detail="No saved design available from admin."
             )
+
         pages_payload = json.loads(design.pages_json)
+        print(f"Using pages {pages_payload}")
         request.pages = [PageConfig(**p) for p in pages_payload]
         request.user_face_filename = design.user_face_filename
 
@@ -213,9 +217,7 @@ async def generate_story(
             logger.info(f"Error deleting user face assets: {e}")
 
         try:
-            deleted_designs = delete_other_user_designs(
-                current_user.id, db, keep_design_id=design.id
-            )
+            deleted_designs = delete_other_user_designs(current_user.id, db)
             logger.info(
                 f"Deleted {deleted_designs} old designs for user {current_user.id}"
             )

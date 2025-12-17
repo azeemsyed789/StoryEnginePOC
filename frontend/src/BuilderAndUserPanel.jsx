@@ -440,6 +440,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
     const hasDesignedPages = pages.some((p) => p.background !== null);
 
     // If the user has no local design (likely after re-login), rely on server-saved design
+    console.log("hasDesignedPages", hasDesignedPages);
     const shouldUseSavedDesign = !hasDesignedPages;
 
     if (!shouldUseSavedDesign && !userFace) {
@@ -448,6 +449,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
     setIsGenerating(true);
     try {
+      console.log("shouldUseSavedDesign", shouldUseSavedDesign);
       const payload = shouldUseSavedDesign
         ? {}
         : {
@@ -606,7 +608,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
                   className="w-full bg-gray-900 text-white text-xs p-2 rounded-b border border-cyan-600 focus:border-white outline-none"
                 />
               </div>
-              <button
+              {/* <button
                 onClick={() => {
                   if (!userFace) {
                     alert("Please upload a face image first!");
@@ -617,7 +619,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
                 className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 rounded text-white font-bold text-xs shadow-lg flex items-center justify-center gap-2 mt-2"
               >
                 <span>👤</span> ADD USER HERO
-              </button>
+              </button> */}
             </div>
 
             {/* SECONDARY CHARACTER */}

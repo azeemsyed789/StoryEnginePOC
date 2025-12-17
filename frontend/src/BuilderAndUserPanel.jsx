@@ -708,27 +708,31 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
       {/* CANVAS */}
       <div className="flex-1 bg-black flex items-center justify-center bg-grid-pattern relative">
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-          <div
-            className="relative w-[800px] h-[600px] bg-gray-900 shadow-2xl border border-gray-700 overflow-hidden"
-            style={{
-              backgroundImage: activePage.background
-                ? `url(${activePage.background.url})`
-                : "none",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}
-          >
-            {!activePage.background && (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-600">
-                [Select a Background]
-              </div>
-            )}
-            {activePage.items.map((item) => (
-              <DraggableItem key={item.id} {...item} onRemove={removeItem} />
-            ))}
-          </div>
-        </DndContext>
+        {isAdmin ? (
+          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+            <div
+              className="relative w-[800px] h-[600px] bg-gray-900 shadow-2xl border border-gray-700 overflow-hidden"
+              style={{
+                backgroundImage: activePage.background
+                  ? `url(${activePage.background.url})`
+                  : "none",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+            >
+              {!activePage.background && (
+                <div className="absolute inset-0 flex items-center justify-center text-gray-600">
+                  [Select a Background]
+                </div>
+              )}
+              {activePage.items.map((item) => (
+                <DraggableItem key={item.id} {...item} onRemove={removeItem} />
+              ))}
+            </div>
+          </DndContext>
+        ) : (
+          <div className="w-[800px] h-[600px] bg-black shadow-2xl border border-gray-700" />
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import os
+import logging
 import shutil
 import uuid
 import json
@@ -14,6 +15,10 @@ from sqlalchemy.orm import Session
 from engine_logic import StoryEngine
 from database import SessionLocal, engine, Base
 from PIL import Image, ImageDraw, ImageFont
+from helper import delete_user_face_assets
+from rembg import remove as rembg_remove
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
@@ -23,7 +28,7 @@ app = FastAPI(title="Identity Story Engine API")
 
 BASE_URL = os.getenv("BASE_URL")
 if not BASE_URL:
-    print("BASE URL must be set in the environment")
+    logger.info("BASE URL must be set in the environment")
     BASE_URL = "http://127.0.0.1:8000"
 
 Base.metadata.create_all(bind=engine)
@@ -136,15 +141,6 @@ async def generate_story(
         raise HTTPException(status_code=403, detail="Admins cannot generate stories")
 
     if not request.pages:
-        # design = (
-        #     db.query(StoryDesign)
-        #     .filter(
-        #         StoryDesign.user_id == current_user.id,
-        #         StoryDesign.status == "designed",
-        #     )
-        #     .order_by(StoryDesign.updated_at.desc())
-        #     .first()
-        # )
         design = (
             db.query(StoryDesign)
             .filter(StoryDesign.user_id == current_user.id)
@@ -170,7 +166,7 @@ async def generate_story(
     locked_style = None
 
     for i, page in enumerate(request.pages):
-        print(f"Generating Page {i+1}...")
+        logger.info(f"Generating Page {i+1}...")
         image_url, image_path = engine.generate_page_image(
             page,
             request.user_face_filename,
@@ -197,6 +193,14 @@ async def generate_story(
         db.add(design)
         db.commit()
 
+        try:
+            deleted_count = delete_user_face_assets(current_user.id, db, UPLOAD_DIR)
+            logger.info(
+                f"Deleted {deleted_count} face assets for user {current_user.id}"
+            )
+        except Exception as e:
+            logger.info(f"Error deleting user face assets: {e}")
+
     return {"status": "success", "pdf_url": pdf_url, "image_urls": generated_urls}
 
 
@@ -218,11 +222,24 @@ async def upload_face(
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
-    file_location = f"{UPLOAD_DIR}/{file.filename}"
-    with open(file_location, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    # Read the uploaded image bytes
+    original_bytes = await file.read()
 
-    asset = UploadedAsset(filename=file.filename, user_id=current_user.id, type="face")
+    try:
+        # Use rembg to remove the background and return a PNG with alpha channel
+        output_bytes = rembg_remove(original_bytes)
+    except Exception as e:
+        logger.error(f"Background removal failed, storing original image. Error: {e}")
+        output_bytes = original_bytes
+
+    # Always store as PNG to preserve transparency
+    new_filename = f"{uuid.uuid4()}.png"
+    file_location = UPLOAD_DIR / new_filename
+
+    with open(file_location, "wb") as f:
+        f.write(output_bytes)
+
+    asset = UploadedAsset(filename=new_filename, user_id=current_user.id, type="face")
     db.add(asset)
     db.commit()
     db.refresh(asset)
@@ -230,17 +247,16 @@ async def upload_face(
     # create a new story design record tied to this face upload
     new_design = StoryDesign(
         user_id=current_user.id,
-        user_face_filename=file.filename,
+        user_face_filename=new_filename,
         pages_json="[]",
         status="pending_admin",
     )
     db.add(new_design)
     db.commit()
 
-    # return {"filename": file.filename, "url": f"/static/uploads/{file.filename}"}
     return {
-        "url": f"{BASE_URL}/static/uploads/{file.filename}",
-        "filename": file.filename,
+        "url": f"{BASE_URL}/static/uploads/{new_filename}",
+        "filename": new_filename,
     }
 
 

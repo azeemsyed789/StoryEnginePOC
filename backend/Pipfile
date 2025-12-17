@@ -22,6 +22,7 @@ passlib = {extras = ["bcrypt"], version = "*"}
 python-jose = {extras = ["cryptography"], version = "*"}
 alembic = "*"
 black = "*"
+rembg = "*"
 
 [dev-packages]
 

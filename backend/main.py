@@ -102,25 +102,39 @@ async def upload_asset(
         raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}")
 
     try:
-        new_filename = f"{uuid.uuid4()}{file_ext}"
-        # save_path = UPLOAD_DIR / new_filename
-        # with open(save_path, "wb+") as buffer:
-        #     shutil.copyfileobj(file.file, buffer)
-        # return {
-        #     "url": f"{BASE_URL}/static/uploads/{new_filename}",
-        #     "filename": new_filename,
-        # }
-        if subdir in ("backgrounds", "characters"):
+        if subdir == "characters":
+            original_bytes = await file.read()
+            try:
+                output_bytes = rembg_remove(original_bytes)
+            except Exception as e:
+                logger.error(
+                    f"Background removal for character failed, storing original image. Error: {e}"
+                )
+                output_bytes = original_bytes
+
+            new_filename = f"{uuid.uuid4()}.png"
             save_dir = UPLOAD_DIR / subdir
             save_dir.mkdir(parents=True, exist_ok=True)
             save_path = save_dir / new_filename
             response_filename = f"{subdir}/{new_filename}"
         else:
-            save_path = UPLOAD_DIR / new_filename
-            response_filename = f"{new_filename}"
+            new_filename = f"{uuid.uuid4()}{file_ext}"
+            if subdir in ("backgrounds", "characters"):
+                save_dir = UPLOAD_DIR / subdir
+                save_dir.mkdir(parents=True, exist_ok=True)
+                save_path = save_dir / new_filename
+                response_filename = f"{subdir}/{new_filename}"
+            else:
+                save_path = UPLOAD_DIR / new_filename
+                response_filename = f"{new_filename}"
 
-        with open(save_path, "wb+") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        if subdir == "characters":
+            with open(save_path, "wb+") as buffer:
+                buffer.write(output_bytes)
+        else:
+            save_path = UPLOAD_DIR / new_filename
+            with open(save_path, "wb+") as buffer:
+                shutil.copyfileobj(file.file, buffer)
 
         return {
             "url": f"{BASE_URL}/static/uploads/{response_filename}",
@@ -147,7 +161,6 @@ async def generate_story(
             .order_by(StoryDesign.updated_at.desc())
             .first()
         )
-        # print("design:", design)
         if not design or not design.pages_json:
             raise HTTPException(
                 status_code=400, detail="No saved design available from admin."
@@ -181,7 +194,6 @@ async def generate_story(
 
     pdf_url = engine.compile_pdf(generated_pages)
 
-    # mark the latest design as generated (user has created a PDF from it)
     design = (
         db.query(StoryDesign)
         .filter(StoryDesign.user_id == current_user.id)
@@ -222,17 +234,14 @@ async def upload_face(
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
 
-    # Read the uploaded image bytes
     original_bytes = await file.read()
 
     try:
-        # Use rembg to remove the background and return a PNG with alpha channel
         output_bytes = rembg_remove(original_bytes)
     except Exception as e:
         logger.error(f"Background removal failed, storing original image. Error: {e}")
         output_bytes = original_bytes
 
-    # Always store as PNG to preserve transparency
     new_filename = f"{uuid.uuid4()}.png"
     file_location = UPLOAD_DIR / new_filename
 
@@ -243,16 +252,6 @@ async def upload_face(
     db.add(asset)
     db.commit()
     db.refresh(asset)
-
-    # create a new story design record tied to this face upload
-    new_design = StoryDesign(
-        user_id=current_user.id,
-        user_face_filename=new_filename,
-        pages_json="[]",
-        status="pending_admin",
-    )
-    db.add(new_design)
-    db.commit()
 
     return {
         "url": f"{BASE_URL}/static/uploads/{new_filename}",

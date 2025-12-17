@@ -21,7 +21,7 @@ const PRELOADED_BACKGROUNDS = [
   },
   {
     id: "bg2",
-    filename: "backgroundsbg2.png",
+    filename: "backgrounds/bg2.png",
     name: "Forest Temple",
     url: `${BASE_URL}/static/uploads/backgrounds/bg2.png`,
   },

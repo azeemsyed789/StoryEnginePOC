@@ -7,11 +7,11 @@ from typing import Optional
 from database import SessionLocal
 from models import User
 from sqlalchemy.orm import Session
-
+from dotenv import load_dotenv
+load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
-    print("SECRET_KEY must be set in the environment")
-    SECRET_KEY = "supersecretkey123"
+    raise ValueError("SECRET_KEY must be set in the environment")
 
 ALGORITHM = os.getenv("ALGORITHM")
 if not ALGORITHM:

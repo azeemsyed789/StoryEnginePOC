@@ -1,5 +1,4 @@
 import os
-import logging
 import shutil
 import uuid
 import json
@@ -17,8 +16,9 @@ from database import SessionLocal, engine, Base
 from PIL import Image, ImageDraw, ImageFont
 from helper import delete_user_face_assets, delete_other_user_designs
 from rembg import remove as rembg_remove
+from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
@@ -28,7 +28,7 @@ app = FastAPI(title="Identity Story Engine API")
 
 BASE_URL = os.getenv("BASE_URL")
 if not BASE_URL:
-    logger.info("BASE URL must be set in the environment")
+    print("BASE URL must be set in the environment")
     BASE_URL = "http://127.0.0.1:8000"
 
 Base.metadata.create_all(bind=engine)
@@ -106,7 +106,7 @@ async def upload_asset(
             try:
                 output_bytes = rembg_remove(original_bytes)
             except Exception as e:
-                logger.error(
+                print(
                     f"Background removal for character failed, storing original image. Error: {e}"
                 )
                 output_bytes = original_bytes
@@ -182,7 +182,7 @@ async def generate_story(
     locked_style = None
 
     for i, page in enumerate(request.pages):
-        logger.info(f"Generating Page {i+1}...")
+        print(f"Generating Page {i+1}...")
         image_url, image_path = engine.generate_page_image(
             page,
             request.user_face_filename,
@@ -210,19 +210,15 @@ async def generate_story(
 
         try:
             deleted_count = delete_user_face_assets(current_user.id, db, UPLOAD_DIR)
-            logger.info(
-                f"Deleted {deleted_count} face assets for user {current_user.id}"
-            )
+            print(f"Deleted {deleted_count} face assets for user {current_user.id}")
         except Exception as e:
-            logger.info(f"Error deleting user face assets: {e}")
+            print(f"Error deleting user face assets: {e}")
 
         try:
             deleted_designs = delete_other_user_designs(current_user.id, db)
-            logger.info(
-                f"Deleted {deleted_designs} old designs for user {current_user.id}"
-            )
+            print(f"Deleted {deleted_designs} old designs for user {current_user.id}")
         except Exception as e:
-            logger.info(f"Error deleting old story designs: {e}")
+            print(f"Error deleting old story designs: {e}")
 
     return {"status": "success", "pdf_url": pdf_url, "image_urls": generated_urls}
 
@@ -270,7 +266,7 @@ async def upload_face(
     try:
         output_bytes = rembg_remove(original_bytes)
     except Exception as e:
-        logger.error(f"Background removal failed, storing original image. Error: {e}")
+        print(f"Background removal failed, storing original image. Error: {e}")
         output_bytes = original_bytes
 
     new_filename = f"{uuid.uuid4()}.png"
@@ -283,6 +279,12 @@ async def upload_face(
     db.add(asset)
     db.commit()
     db.refresh(asset)
+
+    try:
+        deleted_designs = delete_other_user_designs(current_user.id, db)
+        print(f"Deleted {deleted_designs} old designs for user {current_user.id}")
+    except Exception as e:
+        print(f"Error deleting old story designs: {e}")
 
     return {
         "url": f"{BASE_URL}/static/uploads/{new_filename}",

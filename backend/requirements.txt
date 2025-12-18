@@ -9,3 +9,11 @@ opencv-python
 reportlab
 google-generativeai
 replicate
+onnxruntime
+python-multipart
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+alembic
+black
+rembg

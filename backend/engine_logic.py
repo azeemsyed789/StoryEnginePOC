@@ -49,13 +49,19 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     print("⚠️ Warning: GOOGLE_API_KEY not set in .env file")
 else:
-    print(f"✅ Google API Key loaded: {GOOGLE_API_KEY[:20]}...")
+    # print(f"✅ Google API Key loaded: {GOOGLE_API_KEY[:20]}...")
+    print(f"✅ Google API Key loaded...")
     genai.configure(api_key=GOOGLE_API_KEY)
+
+BASE_URL = os.getenv("BASE_URL")
+if not BASE_URL:
+    print("BASE URL must be set in the environment")
+    BASE_URL = "http://127.0.0.1:8000"
 
 
 class StoryEngine:
     def __init__(self):
-        self.previous_image_path = None  # Track previous image for reference
+        self.previous_image_path = None
 
     def encode_image_to_base64(self, file_path: str) -> str:
         """Encode an image file to base64 string."""
@@ -367,7 +373,7 @@ Output image must have: unchanged background + characters at exact positions.
                 self.previous_image_path = final_path
 
             return (
-                f"http://127.0.0.1:8000/static/generated/{Path(final_path).name}",
+                f"{BASE_URL}/static/generated/{Path(final_path).name}",
                 final_path,
             )
 
@@ -442,7 +448,7 @@ Output image must have: unchanged background + characters at exact positions.
             c.showPage()
 
         c.save()
-        return f"http://127.0.0.1:8000/static/generated/{pdf_name}"
+        return f"{BASE_URL}/static/generated/{pdf_name}"
 
     def analyze_generated_style(self, image_path):
         return "Cinematic photorealistic style with dramatic lighting"

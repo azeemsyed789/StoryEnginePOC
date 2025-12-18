@@ -38,7 +38,7 @@ def delete_user_face_assets(
                 file_path.unlink()
                 deleted_files += 1
         except Exception as e:
-            logger.info(f"Failed deleting file {fname}: {e}")
+            print(f"Failed deleting file {fname}: {e}")
 
     deleted_rows = (
         db.query(UploadedAsset)
@@ -48,7 +48,7 @@ def delete_user_face_assets(
     if deleted_rows > 0:
         db.commit()
 
-    logger.info(
+    print(
         f"Deleted {deleted_rows} DB records and {deleted_files} files for user {user_id}"
     )
     return deleted_rows
@@ -74,7 +74,7 @@ def delete_other_user_designs(
 
     deleted = result.rowcount or 0
 
-    logger.info(
+    print(
         f"Deleted {deleted} story designs for user {user_id}"
     )
     return deleted

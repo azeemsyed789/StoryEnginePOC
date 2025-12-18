@@ -18,10 +18,7 @@ if not ALGORITHM:
     print("ALGORITHM must be set in the environment")
     ALGORITHM = "HS256"
 
-ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
-if not ACCESS_TOKEN_EXPIRE_MINUTES:
-    print("ACCESS_TOKEN_EXPIRE_MINUTES must be set in the environment")
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 

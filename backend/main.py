@@ -236,6 +236,26 @@ async def login(email: str = Form(...), password: str = Form(...)):
     return {"access_token": token, "token_type": "bearer", "role": user.role}
 
 
+@app.post("/register")
+async def register(
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form("user"),
+    db: Session = Depends(lambda: SessionLocal()),
+):
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = User(email=email, password_hash=password, role=role)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    token = create_access_token({"sub": new_user.email, "role": new_user.role})
+    return {"access_token": token, "token_type": "bearer", "role": new_user.role}
+
+
 @app.post("/upload-face")
 async def upload_face(
     file: UploadFile = File(...),

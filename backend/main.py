@@ -100,6 +100,7 @@ async def upload_asset(
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}")
 
+    print(f"Subdir {subdir}")
     try:
         if subdir == "characters":
             original_bytes = await file.read()
@@ -131,7 +132,10 @@ async def upload_asset(
             with open(save_path, "wb+") as buffer:
                 buffer.write(output_bytes)
         else:
-            save_path = UPLOAD_DIR / new_filename
+            if response_filename:
+                save_path = UPLOAD_DIR / response_filename
+            else:
+                save_path = UPLOAD_DIR / new_filename
             with open(save_path, "wb+") as buffer:
                 shutil.copyfileobj(file.file, buffer)
 

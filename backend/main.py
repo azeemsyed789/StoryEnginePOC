@@ -12,7 +12,7 @@ from auth import authenticate_user, create_access_token, get_current_user
 from models import User, UploadedAsset, StoryDesign
 from sqlalchemy.orm import Session
 from engine_logic import StoryEngine
-from database import SessionLocal, engine, Base
+from database import SessionLocal, engine, Base, get_db
 from PIL import Image, ImageDraw, ImageFont
 from helper import delete_user_face_assets, delete_other_user_designs
 from rembg import remove as rembg_remove
@@ -85,6 +85,11 @@ class SaveDesignRequest(BaseModel):
     status: Optional[str] = "draft"
 
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "StoryEngine backend", "env": "huggingface"}
+
+
 # --- UPLOAD ENDPOINT ---
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif"}
 
@@ -152,7 +157,7 @@ async def upload_asset(
 async def generate_story(
     request: StoryRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     print(f"Request story {request}... Reqiest.pages {request.pages}")
     if current_user.role != "user":
@@ -241,7 +246,7 @@ async def register(
     email: str = Form(...),
     password: str = Form(...),
     role: str = Form("user"),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     existing_user = db.query(User).filter(User.email == email).first()
     if existing_user:
@@ -260,7 +265,7 @@ async def register(
 async def upload_face(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded.")
@@ -299,7 +304,7 @@ async def upload_face(
 @app.get("/user-faces")
 def get_user_faces(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     """
     Return face assets. Always provide absolute URLs so the frontend can render
@@ -331,7 +336,7 @@ def get_user_faces(
 def save_design(
     payload: SaveDesignRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admins can save designs")
@@ -367,7 +372,7 @@ def save_design(
 @app.get("/user-design")
 def get_user_design(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(lambda: SessionLocal()),
+    db: Session = Depends(get_db),
 ):
     design = (
         db.query(StoryDesign)

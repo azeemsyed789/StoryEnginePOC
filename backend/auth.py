@@ -4,10 +4,11 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
-from database import SessionLocal
+from database import SessionLocal, get_db
 from models import User
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
+
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
@@ -24,14 +25,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 def authenticate_user(email: str, password: str):
-    db = SessionLocal()
-    user = db.query(User).filter(User.email == email).first()
-    db.close()
-    if not user:
-        return None
-    if user.password_hash != password:
-        return None
-    return user
+    db: Session = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return None
+        if user.password_hash != password:
+            return None
+        return user
+    finally:
+        db.close()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -46,7 +49,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(lambda: SessionLocal())
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])

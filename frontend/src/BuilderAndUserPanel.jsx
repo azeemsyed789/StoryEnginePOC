@@ -196,17 +196,20 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
         const res = await axios.get(`${BASE_URL}/user-faces`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
-        console.log("user faces:", res.data);
+        // Only update if data has changed to prevent unnecessary re-renders (optimization optional but good practice,
+        // strictly for this task just setting it is fine as React handles identical state updates well enough usually,
+        // but let's stick to the plan: simple polling).
+        // console.log("user faces:", res.data);
         setUserFaces(res.data);
-
-        // if (!isAdmin && res.data.length > 0) {
-        //   setUserFace(res.data[0]);
-        // }
       } catch (err) {
         console.error("Error fetching faces:", err);
       }
     };
+
     fetchFaces();
+    const interval = setInterval(fetchFaces, 5000);
+
+    return () => clearInterval(interval);
   }, [isAdmin]);
 
   useEffect(() => {

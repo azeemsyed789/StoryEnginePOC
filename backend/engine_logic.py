@@ -428,15 +428,14 @@ Output image must have: unchanged background + characters at exact positions.
                     x_pos = (page_width - draw_width) / 2
                     y_pos = (page_height - draw_height) / 2
 
-                    # Draw the image into this 16:9 frame while preserving
-                    # its own aspect ratio so we do not distort the content.
+                    # Draw the image into this 16:9 frame, forcing it to fill
+                    # the entire frame to maintain strict 16:9 aspect ratio
                     c.drawImage(
                         image_path,
                         x_pos,
                         y_pos,
                         width=draw_width,
                         height=draw_height,
-                        preserveAspectRatio=True,
                     )
                 except Exception as e:
                     print(f"⚠️ Error processing image for PDF: {e}")

@@ -371,8 +371,8 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
         ? activePage.primaryPose
         : activePage.secondaryPose;
     const newItem = {
-      id: `${type}_${Date.now()}_${Math.random()}`,
       ...asset,
+      id: `${type}_${Date.now()}_${Math.random()}`,
       image: asset.url || asset.image,
       x: 350 + Math.random() * 30,
       y: 250 + Math.random() * 30,

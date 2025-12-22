@@ -297,6 +297,17 @@ Output image must have: unchanged background + characters at exact positions.
         if locked_style:
             final_prompt += f"\nVISUAL STYLE: {locked_style}"
 
+        # CRITICAL QUALITY & CONSISTENCY INJECTION
+        final_prompt += """
+---
+**STRICT RENDER PIPELINE (NO CREATIVE FREEDOM ON LAYOUT):**
+1. **LAYOUT IS FINAL**: The [X,Y] positions and relative sizes provided are the **FINAL LAYOUT**. You are NOT a director; you are a RENDERER. Do not move, resize, or "improve" the composition. RENDER IT EXACTLY AS PROVIDED.
+2. **TEXTURE FIDELITY**: You MUST render with **8K raw photo fidelity**. No "AI smoothing". Skin pores, fabric imperfections, and surface scuffs are MANDATORY.
+3. **LIGHTING INTEGRATION**: Your ONLY creative task is **LIGHTING**. Match the character lighting to the background's environment map. Ground them with contact shadows.
+4. **NEGATIVE PROMPT**: Painting, illustration, cartoon, sketch, smooth skin, floating, wrong size, moved characters.
+---
+"""
+
         print(f"📝 Prompt: {final_prompt[:250]}...")
 
         # --- Image Generation with STRICT Background Preservation and Positioning ---

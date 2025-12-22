@@ -95,8 +95,18 @@ function DraggableItem({ id, x, y, image, type, pose, onRemove }) {
         e.preventDefault();
         onRemove(id);
       }}
-      className="cursor-move w-32 h-40 group hover:scale-105 transition-transform"
+      className="cursor-move w-32 h-40 group hover:scale-105 transition-transform relative"
     >
+      <button
+        className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-50 opacity-0 group-hover:opacity-100 transition-opacity"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(id);
+        }}
+      >
+        X
+      </button>
       <div
         className={`w-full h-full p-2 flex flex-col items-center justify-center rounded-lg shadow-xl ${
           type === "placeholder"

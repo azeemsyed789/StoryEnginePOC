@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-
-const BASE_URL = "http://127.0.0.1:8000";
+import { BASE_URL } from "./config";
 
 export default function Login({ onLoginSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -19,6 +18,7 @@ export default function Login({ onLoginSuccess }) {
       formData.append("password", password);
 
       const res = await axios.post(`${BASE_URL}/login`, formData);
+      console.log("login response", res.data);
       const { access_token, role } = res.data;
 
       localStorage.setItem("token", access_token);

@@ -7,9 +7,7 @@ import {
   PointerSensor,
 } from "@dnd-kit/core";
 import axios from "axios";
-
-// --- CONFIG ---
-const BASE_URL = "http://127.0.0.1:8000";
+import { BASE_URL } from "./config";
 
 // --- PRE-LOADED ASSETS ---
 const PRELOADED_BACKGROUNDS = [
@@ -278,9 +276,11 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
       if (type === "bg") {
         formData.append("subdir", "backgrounds");
+        console.log("sending formData in upload-asset type bg", formData);
         const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        console.log("res", res.data);
 
         const asset = {
           id: res.data.filename,
@@ -294,6 +294,7 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
         setIsUploadingCharacter(true);
         formData.append("subdir", "characters");
         try {
+          console.log("sending formData in upload-asset type char", formData);
           const res = await axios.post(`${BASE_URL}/upload-asset`, formData, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -437,41 +438,13 @@ export default function BuilderAndUserPanel({ role, onLogout }) {
 
   const generateStory = async () => {
     const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-    const hasDesignedPages = pages.some((p) => p.background !== null);
 
-    // If the user has no local design (likely after re-login), rely on server-saved design
-    console.log("hasDesignedPages", hasDesignedPages);
-    const shouldUseSavedDesign = !hasDesignedPages;
-
-    if (!shouldUseSavedDesign && !userFace) {
-      return alert("User: Please upload your face first!");
-    }
+    // Always send empty payload - backend will use the last saved design
+    const payload = {};
 
     setIsGenerating(true);
     try {
-      console.log("shouldUseSavedDesign", shouldUseSavedDesign);
-      const payload = shouldUseSavedDesign
-        ? {}
-        : {
-            user_face_filename: userFace.filename,
-            pages: pages.map((p) => ({
-              background_filename: p.background ? p.background.filename : "",
-              text: p.text,
-              primary_pose: p.primaryPose,
-              secondary_pose: p.secondaryPose,
-              elements: p.items.map((item) => ({
-                type: item.type,
-                asset_filename:
-                  item.type === "placeholder"
-                    ? userFace.filename
-                    : item.filename,
-                pose: item.pose,
-                x: Math.max(0, Math.min(item.x, 800)) / 800,
-                y: Math.max(0, Math.min(item.y, 600)) / 600,
-              })),
-            })),
-          };
-
+      console.log("Sending empty payload to use saved design from backend");
       const res = await axios.post(`${BASE_URL}/generate-story`, payload, {
         headers: authHeaders,
       });

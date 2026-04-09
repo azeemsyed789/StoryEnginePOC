@@ -69,7 +69,7 @@ async def upload_asset(file: UploadFile = File(...)):
         save_path = UPLOAD_DIR / new_filename
         with open(save_path, "wb+") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        return {"url": f"http://127.0.0.1:8000/static/uploads/{new_filename}", "filename": new_filename}
+        return {"url": f"/static/uploads/{new_filename}", "filename": new_filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File upload failed: {str(e)}")
 

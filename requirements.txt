@@ -5,7 +5,7 @@ requests
 pydantic
 pillow
 insightface
-opencv-python
+opencv-python-headless
 reportlab
 google-generativeai
 replicate

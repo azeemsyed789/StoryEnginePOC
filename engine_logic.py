@@ -26,7 +26,7 @@ OUTPUT_DIR = BASE_DIR / "static" / "generated"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# This is your live public address
+# This is your live public address for Render
 PUBLIC_URL = "https://storyenginepoc.onrender.com"
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -172,8 +172,9 @@ class StoryEngine:
             return "", ""
 
     def compile_pdf(self, pages_data):
-        """Compiles a PDF while ensuring images exist on the server disk first."""
+        """Compiles a PDF by forcing absolute path lookups for Render's environment."""
         from reportlab.lib.units import inch
+        
         pdf_name = f"Story_{uuid.uuid4()}.pdf"
         pdf_path = OUTPUT_DIR / pdf_name
         page_width, page_height = 11 * inch, 8.5 * inch
@@ -181,27 +182,31 @@ class StoryEngine:
         c = canvas.Canvas(str(pdf_path), pagesize=(page_width, page_height))
         
         for page in pages_data:
-            img_p = page.get("image_path")
+            # Get the path sent from main.py
+            img_path = page.get("image_path")
             
-            # --- VERIFICATION LOOP: Wait up to 5 seconds for AI to finish saving file ---
+            # --- RENDER DISK DELAY FIX ---
+            # Wait up to 5 seconds for the AI to finish writing the file to disk
             retries = 5
-            while img_p and not os.path.exists(img_p) and retries > 0:
-                print(f"⌛ Waiting for image {img_p} to save...")
+            while img_path and not os.path.exists(img_path) and retries > 0:
+                print(f"⌛ Waiting for image {img_path} to save...")
                 time.sleep(1)
                 retries -= 1
 
-            if img_p and os.path.exists(img_p):
-                print(f"✅ Adding image to PDF: {img_p}")
-                c.drawImage(img_p, 20, 100, width=page_width-40, height=page_height-140, preserveAspectRatio=True)
+            if img_path and os.path.exists(img_path):
+                print(f"✅ Adding image to PDF: {img_path}")
+                # Use str() to ensure it's a string path for ReportLab
+                c.drawImage(str(img_path), 20, 100, width=page_width-40, height=page_height-140, preserveAspectRatio=True)
             else:
-                print(f"❌ Skipping page - Image not found: {img_p}")
+                print(f"❌ Skipping page - Image not found: {img_path}")
             
             c.setFont("Helvetica", 12)
-            c.drawString(20, 30, f"Story: {page.get('text', '')[:100]}")
+            text_content = page.get("text", "")
+            c.drawString(40, 50, f"Story: {text_content[:100]}")
             c.showPage()
         
         c.save()
-        # Return the public Render URL
+        # Returns the full PUBLIC Render URL for the PDF
         return f"{PUBLIC_URL}/static/generated/{pdf_name}"
 
     def analyze_generated_style(self, image_path):

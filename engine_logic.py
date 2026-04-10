@@ -3,13 +3,14 @@ import cv2
 import base64
 import requests
 import uuid
+import time
 from PIL import Image
 from dotenv import load_dotenv
 from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 import google.generativeai as genai
-import insightface # Ensure this is imported for the swapper
+import insightface 
 
 # --- IDENTITY ENGINE SETUP ---
 INSIGHTFACE_AVAILABLE = True 
@@ -146,7 +147,7 @@ class StoryEngine:
         if locked_style: final_prompt += f"\nSTYLE: {locked_style}"
 
         try:
-            model = genai.GenerativeModel('gemini-1.5-pro') # Using stable model
+            model = genai.GenerativeModel('gemini-1.5-pro') 
             content = [final_prompt, bg_image]
             for spec in character_specs:
                 char_img = Image.open(str(spec["image_path"]))
@@ -165,13 +166,13 @@ class StoryEngine:
             if has_placeholder and INSIGHTFACE_AVAILABLE:
                 final_path = self.perform_identity_swap(temp_path, user_face_filename)
             
-            # FIXED: Returning relative path to be combined with BASE_URL in frontend
             return f"/static/generated/{Path(final_path).name}", final_path
 
         except Exception as e:
             return "", ""
 
     def compile_pdf(self, pages_data):
+        """Compiles a PDF while ensuring images exist on the server disk first."""
         from reportlab.lib.units import inch
         pdf_name = f"Story_{uuid.uuid4()}.pdf"
         pdf_path = OUTPUT_DIR / pdf_name
@@ -181,15 +182,26 @@ class StoryEngine:
         
         for page in pages_data:
             img_p = page.get("image_path")
+            
+            # --- VERIFICATION LOOP: Wait up to 5 seconds for AI to finish saving file ---
+            retries = 5
+            while img_p and not os.path.exists(img_p) and retries > 0:
+                print(f"⌛ Waiting for image {img_p} to save...")
+                time.sleep(1)
+                retries -= 1
+
             if img_p and os.path.exists(img_p):
+                print(f"✅ Adding image to PDF: {img_p}")
                 c.drawImage(img_p, 20, 100, width=page_width-40, height=page_height-140, preserveAspectRatio=True)
+            else:
+                print(f"❌ Skipping page - Image not found: {img_p}")
             
             c.setFont("Helvetica", 12)
             c.drawString(20, 30, f"Story: {page.get('text', '')[:100]}")
             c.showPage()
         
         c.save()
-        # FIXED: Returning the full PUBLIC Render URL for the PDF
+        # Return the public Render URL
         return f"{PUBLIC_URL}/static/generated/{pdf_name}"
 
     def analyze_generated_style(self, image_path):

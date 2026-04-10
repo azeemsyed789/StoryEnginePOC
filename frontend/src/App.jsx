@@ -3,7 +3,8 @@ import { DndContext, useDraggable, useSensor, useSensors, PointerSensor } from '
 import axios from 'axios';
 
 // --- CONFIG ---
-const BASE_URL = "http://127.0.0.1:8000";
+// Pointing to your live Render backend
+const BASE_URL = "https://storyenginepoc.onrender.com";
 const USER_SLOT_ICON = "https://cdn-icons-png.flaticon.com/512/1077/1077114.png";
 
 // --- PRE-LOADED ASSETS ---
@@ -14,7 +15,7 @@ const PRELOADED_BACKGROUNDS = [
   { id: 'bg4', filename: 'bg4.jpg', name: 'Forest Temple', url: `${BASE_URL}/static/uploads/bg4.jpg` },
 ];
 
-// --- INITIAL STATE (Now includes Pose Memory per page) ---
+// --- INITIAL STATE ---
 const INITIAL_PAGES = Array(5).fill(null).map((_, i) => ({
   id: i,
   background: null,
@@ -82,7 +83,6 @@ export default function App() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const activePage = pages[activePageIdx];
 
-  // --- HELPERS ---
   const updateActivePage = (updates) => {
     setPages(prev => {
       const copy = [...prev];
@@ -91,20 +91,17 @@ export default function App() {
     });
   };
 
-  // Update canvas items when poses change
   const updatePoseAndItems = (poseType, poseValue) => {
     setPages(prev => {
       const copy = [...prev];
       const pageUpdate = { ...copy[activePageIdx] };
       
-      // Update the pose
       if (poseType === 'primary') {
         pageUpdate.primaryPose = poseValue;
       } else {
         pageUpdate.secondaryPose = poseValue;
       }
       
-      // Update items with matching type
       pageUpdate.items = pageUpdate.items.map(item => {
         if (poseType === 'primary' && item.type === 'placeholder') {
           return { ...item, pose: poseValue };
@@ -128,7 +125,13 @@ export default function App() {
 
     try {
       const res = await axios.post(`${BASE_URL}/upload-asset`, formData);
-      const asset = { id: res.data.filename, url: res.data.url, filename: res.data.filename, name: file.name };
+      // FIXED: Combining BASE_URL with the relative path from the backend
+      const asset = { 
+        id: res.data.filename, 
+        url: `${BASE_URL}${res.data.url}`, 
+        filename: res.data.filename, 
+        name: file.name 
+      };
 
       if (type === "bg") setBackgrounds(prev => [...prev, asset]);
       else if (type === "char") setCharacters(prev => [...prev, asset]);
@@ -145,7 +148,7 @@ export default function App() {
     const newItem = {
       id: `${type}_${Date.now()}_${Math.random()}`,
       ...asset,
-      image: asset.url || asset.image,  // Ensure image property exists
+      image: asset.url || asset.image,
       x: 350 + (Math.random() * 30),
       y: 250 + (Math.random() * 30),
       pose: poseToUse,
@@ -219,7 +222,6 @@ export default function App() {
 
         {mode === 'ADMIN' ? (
           <div className="p-5 overflow-y-auto space-y-6 flex-1">
-            {/* Page Nav */}
             <div className="bg-gray-700/30 p-3 rounded border border-gray-600">
               <h3 className="text-gray-400 text-[10px] font-bold uppercase mb-2">1. Select Page</h3>
               <div className="flex gap-2">
@@ -238,7 +240,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Backgrounds */}
             <div>
               <div className="flex justify-between mb-2">
                 <h3 className="text-xs font-bold text-gray-400">2. SELECT BACKGROUND</h3>
@@ -257,7 +258,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* PRIMARY CHARACTER */}
             <div className="bg-cyan-900/20 p-4 rounded border border-cyan-500/30">
               <h3 className="text-cyan-400 text-[10px] font-bold uppercase mb-2">3. PRIMARY CHARACTER (USER)</h3>
               <div className="mb-2">
@@ -297,7 +297,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* SECONDARY CHARACTER */}
             <div className="bg-purple-900/20 p-4 rounded border border-purple-500/30">
               <div className="flex justify-between mb-2">
                 <h3 className="text-purple-400 text-[10px] font-bold uppercase">4. SECONDARY CHARACTER</h3>
@@ -342,7 +341,6 @@ export default function App() {
             <textarea value={activePage.text} onChange={(e) => updateActivePage({ text: e.target.value })} className="w-full bg-black/30 p-2 text-xs text-white border border-gray-600 rounded resize-none" rows={3} placeholder="Story text..." />
           </div>
         ) : (
-          /* USER PANEL */
           <div className="p-8 flex flex-col items-center justify-center h-full space-y-6">
             <h2 className="text-3xl font-bold text-white">Create Your Story</h2>
             <div onClick={() => faceInput.current.click()} className="w-56 h-56 rounded-full border-4 border-dashed border-cyan-500 flex items-center justify-center cursor-pointer hover:bg-gray-800 overflow-hidden relative shadow-2xl">
@@ -359,7 +357,6 @@ export default function App() {
         )}
       </div>
 
-      {/* CANVAS */}
       <div className="flex-1 bg-black flex items-center justify-center bg-grid-pattern relative">
         <div className="absolute top-4 bg-gray-800 px-4 py-1 rounded-full text-xs font-mono text-gray-400 z-50">
           {mode === 'ADMIN' ? `DESIGNING PAGE ${activePageIdx + 1}` : 'PREVIEW MODE'}

@@ -11,30 +11,11 @@ from reportlab.lib.pagesizes import letter
 import google.generativeai as genai
 
 # --- IDENTITY ENGINE (INSIGHTFACE) ---
-print("--- LOADING IDENTITY ENGINE ---")
-INSIGHTFACE_AVAILABLE = False
+# --- IDENTITY ENGINE (LAZY LOADING SETUP) ---
+print("--- IDENTITY ENGINE INITIALIZED (WAITING FOR CALL) ---")
+INSIGHTFACE_AVAILABLE = True # We assume true, but will check during swap
 face_app = None
 swapper = None
-
-try:
-    import insightface
-    from insightface.app import FaceAnalysis
-
-    face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
-    face_app.prepare(ctx_id=0, det_size=(640, 640))
-
-    if os.path.exists("inswapper_128.onnx"):
-        swapper = insightface.model_zoo.get_model(
-            "inswapper_128.onnx", download=False, download_zip=False
-        )
-        INSIGHTFACE_AVAILABLE = True
-        print("✅ InsightFace Identity Engine Loaded.")
-    else:
-        print("❌ 'inswapper_128.onnx' missing. Face swap will fail.")
-        INSIGHTFACE_AVAILABLE = False
-except Exception as e:
-    print(f"❌ InsightFace Error: {e}")
-    INSIGHTFACE_AVAILABLE = False
 
 load_dotenv()
 
@@ -66,10 +47,34 @@ class StoryEngine:
             print(f"⚠️ Error encoding image: {e}")
             return None
 
-    def perform_identity_swap(self, scene_path, user_face_filename):
+   def perform_identity_swap(self, scene_path, user_face_filename):
+        global face_app, swapper  # <--- CRITICAL: Allows the function to update the global variables
+        
         if not INSIGHTFACE_AVAILABLE:
             return str(scene_path)
 
+        # --- LAZY LOADING LOGIC ---
+        try:
+            if face_app is None:
+                print("📥 Loading FaceAnalysis (buffalo_s)...")
+                from insightface.app import FaceAnalysis
+                face_app = FaceAnalysis(name="buffalo_s", providers=["CPUExecutionProvider"])
+                face_app.prepare(ctx_id=0, det_size=(640, 640))
+
+            if swapper is None:
+                if os.path.exists("inswapper_128.onnx"):
+                    print("📥 Loading Inswapper Model...")
+                    swapper = insightface.model_zoo.get_model(
+                        "inswapper_128.onnx", download=False, download_zip=False
+                    )
+                else:
+                    print("❌ 'inswapper_128.onnx' missing. Skipping swap.")
+                    return str(scene_path)
+        except Exception as e:
+            print(f"❌ Lazy Load Error: {e}")
+            return str(scene_path)
+
+        # --- ACTUAL SWAP LOGIC ---
         img = cv2.imread(str(scene_path))
         user_path = UPLOAD_DIR / user_face_filename
         source_img = cv2.imread(str(user_path))
@@ -80,18 +85,14 @@ class StoryEngine:
         try:
             source_faces = face_app.get(source_img)
             target_faces = face_app.get(img)
-        except Exception as e:
-            print(f"⚠️ Face detection error: {e}")
-            return str(scene_path)
+            
+            if not source_faces or not target_faces:
+                print("⚠️ No faces found for swapping.")
+                return str(scene_path)
 
-        if not source_faces or not target_faces:
-            print("⚠️ No faces found for swapping.")
-            return str(scene_path)
+            source_face = max(source_faces, key=lambda x: x.bbox[2] * x.bbox[3])
+            target_face = max(target_faces, key=lambda x: x.bbox[2] * x.bbox[3])
 
-        source_face = max(source_faces, key=lambda x: x.bbox[2] * x.bbox[3])
-        target_face = max(target_faces, key=lambda x: x.bbox[2] * x.bbox[3])
-
-        try:
             res = swapper.get(img, target_face, source_face, paste_back=True)
             out_filename = f"swap_{uuid.uuid4()}.png"
             out_path = OUTPUT_DIR / out_filename

@@ -10,3 +10,5 @@ reportlab
 google-generativeai
 replicate
 python-multipart
+onnxruntime
+insightface==0.7.3

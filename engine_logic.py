@@ -54,17 +54,19 @@ class StoryEngine:
         try:
             if face_app is None:
                 from insightface.app import FaceAnalysis
+                # Using buffalo_s (small) to try and stay within Render's RAM limits
                 face_app = FaceAnalysis(name="buffalo_s", providers=["CPUExecutionProvider"])
                 face_app.prepare(ctx_id=0, det_size=(640, 640))
 
             if swapper is None:
-                if os.path.exists("inswapper_128.onnx"):
-                    swapper = insightface.model_zoo.get_model(
-                        "inswapper_128.onnx", download=False, download_zip=False
-                    )
+                model_path = os.path.join(os.getcwd(), "inswapper_128.onnx")
+                if os.path.exists(model_path):
+                    swapper = insightface.model_zoo.get_model(model_path, download=False)
                 else:
+                    print("⚠️ Swapper model file not found.")
                     return str(scene_path)
         except Exception as e:
+            print(f"⚠️ Identity Engine Init Error: {e}")
             return str(scene_path)
 
         img = cv2.imread(str(scene_path))
@@ -87,9 +89,12 @@ class StoryEngine:
             res = swapper.get(img, target_face, source_face, paste_back=True)
             out_filename = f"swap_{uuid.uuid4()}.png"
             out_path = OUTPUT_DIR / out_filename
+            
+            # Save and force write to disk
             cv2.imwrite(str(out_path), res)
             return str(out_path)
         except Exception as e:
+            print(f"⚠️ Swap Logic Error: {e}")
             return str(scene_path)
 
     def generate_page_image(self, page_config, user_face_filename, locked_style=None, primary_pose=None, secondary_pose=None):
@@ -102,48 +107,36 @@ class StoryEngine:
         bg_image = Image.open(str(bg_path))
         character_specs = []
         has_placeholder = False
-        secondary_char_count = 0
         
         for el in getattr(page_config, "elements", []):
-            x_val = getattr(el, "x", 0.5)
-            y_val = getattr(el, "y", 0.5)
-            pose = getattr(el, "pose", "standing")
-            char_type = getattr(el, "type", "")
-            
-            x_percent = int(x_val * 100)
-            y_percent = int(y_val * 100)
-            
-            if char_type == "placeholder":
+            if getattr(el, "type", "") == "placeholder":
                 has_placeholder = True
                 user_image_path = UPLOAD_DIR / user_face_filename
                 if user_image_path.exists():
                     character_specs.append({
                         "type": "main",
                         "image_path": user_image_path,
-                        "x_percent": x_percent,
-                        "y_percent": y_percent,
-                        "pose": pose,
+                        "x_percent": int(getattr(el, "x", 0.5) * 100),
+                        "y_percent": int(getattr(el, "y", 0.5) * 100),
+                        "pose": getattr(el, "pose", "standing"),
                         "identifier": "PRIMARY_MAIN"
                     })
             else:
-                asset_filename = getattr(el, "asset_filename", None)
-                if asset_filename:
-                    asset_path = UPLOAD_DIR / asset_filename
+                asset_fn = getattr(el, "asset_filename", None)
+                if asset_fn:
+                    asset_path = UPLOAD_DIR / asset_fn
                     if asset_path.exists():
-                        secondary_char_count += 1
                         character_specs.append({
                             "type": "secondary",
                             "image_path": asset_path,
-                            "x_percent": x_percent,
-                            "y_percent": y_percent,
-                            "pose": pose,
-                            "identifier": f"SECONDARY_{secondary_char_count}"
+                            "x_percent": int(getattr(el, "x", 0.5) * 100),
+                            "y_percent": int(getattr(el, "y", 0.5) * 100),
+                            "pose": getattr(el, "pose", "standing"),
+                            "identifier": f"SECONDARY_{uuid.uuid4().hex[:4]}"
                         })
 
-        movement_instruction = f"PRIMARY CHARACTER: {primary_pose}. SECONDARY CHARACTER: {secondary_pose}."
         char_prompts = [f"- [{s['identifier']}] {'PRIMARY' if s['type']=='main' else 'SECONDARY'}: POS [X={s['x_percent']}%, Y={s['y_percent']}%]. POSE: {s['pose']}." for s in character_specs]
-
-        final_prompt = f"COMPOSITION:\n{chr(10).join(char_prompts)}\nMOVEMENT: {movement_instruction}"
+        final_prompt = f"COMPOSITION:\n{chr(10).join(char_prompts)}\nMOVEMENT: PRIMARY: {primary_pose}, SECONDARY: {secondary_pose}."
         if locked_style: final_prompt += f"\nSTYLE: {locked_style}"
 
         try:
@@ -160,21 +153,29 @@ class StoryEngine:
             
             temp_filename = f"gen_{uuid.uuid4()}.png"
             temp_path = OUTPUT_DIR / temp_filename
-            with open(temp_path, "wb") as f: f.write(img_bytes)
+            with open(temp_path, "wb") as f: 
+                f.write(img_bytes)
+                f.flush()
+                os.fsync(f.fileno()) # Force write to disk for Render
             
             final_path = str(temp_path)
             if has_placeholder and INSIGHTFACE_AVAILABLE:
-                final_path = self.perform_identity_swap(temp_path, user_face_filename)
+                # Wrap swap in a try-except so a RAM crash doesn't return an empty string
+                try:
+                    swapped = self.perform_identity_swap(temp_path, user_face_filename)
+                    if swapped and os.path.exists(swapped):
+                        final_path = swapped
+                except:
+                    print("⚠️ Swap failed, using original AI image.")
             
             return f"/static/generated/{Path(final_path).name}", final_path
 
         except Exception as e:
+            print(f"❌ Generation Error: {e}")
             return "", ""
 
     def compile_pdf(self, pages_data):
-        """Compiles a PDF by forcing absolute path lookups for Render's environment."""
         from reportlab.lib.units import inch
-        
         pdf_name = f"Story_{uuid.uuid4()}.pdf"
         pdf_path = OUTPUT_DIR / pdf_name
         page_width, page_height = 11 * inch, 8.5 * inch
@@ -182,31 +183,24 @@ class StoryEngine:
         c = canvas.Canvas(str(pdf_path), pagesize=(page_width, page_height))
         
         for page in pages_data:
-            # Get the path sent from main.py
-            img_path = page.get("image_path")
+            img_p = page.get("image_path")
             
-            # --- RENDER DISK DELAY FIX ---
-            # Wait up to 5 seconds for the AI to finish writing the file to disk
+            # Wait loop to ensure cloud disk has registered the file
             retries = 5
-            while img_path and not os.path.exists(img_path) and retries > 0:
-                print(f"⌛ Waiting for image {img_path} to save...")
+            while img_p and not os.path.exists(img_p) and retries > 0:
                 time.sleep(1)
                 retries -= 1
 
-            if img_path and os.path.exists(img_path):
-                print(f"✅ Adding image to PDF: {img_path}")
-                # Use str() to ensure it's a string path for ReportLab
-                c.drawImage(str(img_path), 20, 100, width=page_width-40, height=page_height-140, preserveAspectRatio=True)
+            if img_p and os.path.exists(img_p):
+                c.drawImage(str(img_p), 20, 100, width=page_width-40, height=page_height-140, preserveAspectRatio=True)
             else:
-                print(f"❌ Skipping page - Image not found: {img_path}")
+                print(f"❌ Missing file in PDF build: {img_p}")
             
             c.setFont("Helvetica", 12)
-            text_content = page.get("text", "")
-            c.drawString(40, 50, f"Story: {text_content[:100]}")
+            c.drawString(40, 50, f"Story: {page.get('text', '')[:100]}")
             c.showPage()
         
         c.save()
-        # Returns the full PUBLIC Render URL for the PDF
         return f"{PUBLIC_URL}/static/generated/{pdf_name}"
 
     def analyze_generated_style(self, image_path):
